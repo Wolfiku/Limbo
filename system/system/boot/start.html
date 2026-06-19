@@ -3,62 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Start - System Check</title>
+    <title>Start</title>
     <script>
         (async () => {
-            const STORAGE_KEY = 'first-setup';
+            // Dynamische Basis-URL (funktioniert auf GitHub Pages und lokal)
+            const BASE = window.location.origin + '/' + window.location.pathname.split('/')[1];
+
+            const environmentPath            = BASE + '/system/etc/info/host/environment.info';
+            const firstStartupSocketlessPath = BASE + '/system/system/systemapplications/first-startup/localstorage/first-startup.html';
+            const firstStartupSocketPath     = BASE + '/system/system/systemapplications/first-startup/socket/first-startup.html';
+            const homescreenPath             = BASE + '/system/system/systemapplications/homescreen/homescreen-start.html';
+            const socketbootPath             = BASE + '/system/system/boot/Socketboot/boot.js';
+            const firstSetupDataPath         = BASE + '/system/data/etc/first-setup.json';
+            const errFirstStartup            = BASE + '/system/system/errors/missing-files/boot/first-startup.html';
+            const errSocketFirstStartup      = BASE + '/system/system/errors/missing-files/boot/socket-first-startup.html';
+            const errBootJs                  = BASE + '/system/system/errors/missing-files/boot/boot.js.html';
+            const errEnvironment             = BASE + '/system/system/errors/missing-files/boot/environment.info.html';
+
+            const STORAGE_KEY   = 'first-setup';
             const PERMISSION_KEY = 'persistentStorageAllowed';
 
-            // Paths FROM ROOT
-            const environmentPath = '/system/etc/info/host/environment.info';
-            const firstStartupSocketlessPath = '/system/system/systemapplications/first-startup/localstorage/first-startup.html';
-            const firstStartupSocketPath = '/system/system/systemapplications/first-startup/socket/first-startup.html';
-            const homescreenPath = '/system/system/systemapplications/homescreen/homescreen-start.html';
-            const socketbootPath = '/system/system/boot/Socketboot/boot.js';
-            const missingFilesPage1 = '/system/system/errors/missing-files/boot/first-startup.html';
-            const missingFilesBootJs = '/system/system/errors/missing-files/boot/boot.js.html';
-            const missingFilesEnvironment = '/system/system/errors/missing-files/boot/environment.info.html';
-
-            // Socket data paths
-            const firstSetupDataPath = '/system/data/etc/first-setup.json';
-
-            // Helper to check if file exists
             async function fileExists(path) {
                 try {
-                    const response = await fetch(path, { method: 'GET' });
-                    return response.ok;
-                } catch {
-                    return false;
-                }
+                    const r = await fetch(path, { method: 'HEAD' });
+                    return r.ok;
+                } catch { return false; }
             }
 
-            // Helper to read JSON file
             async function readJsonFile(path) {
                 try {
-                    const response = await fetch(path);
-                    if (!response.ok) return null;
-                    return await response.json();
-                } catch {
-                    return null;
-                }
+                    const r = await fetch(path);
+                    if (!r.ok) return null;
+                    return await r.json();
+                } catch { return null; }
             }
 
-            // Check localStorage for first-setup (socketless only)
+            function redirect(path) { window.location.href = path; }
+
             function isFirstSetupTrue() {
                 return localStorage.getItem(STORAGE_KEY) === 'true';
             }
 
-            // Check persistent storage permission (socketless only)
             function hasPersistentStoragePermission() {
                 return localStorage.getItem(PERMISSION_KEY) === 'true';
             }
 
-            // Request persistent storage permission (socketless only)
             async function requestPersistentStorage() {
                 if (hasPersistentStoragePermission()) return true;
-
-                const granted = confirm('Persistent Storage erlaubt?');
-
+                const granted = confirm('Allow persistent storage?');
                 if (granted) {
                     localStorage.setItem(PERMISSION_KEY, 'true');
                     if (navigator.storage && navigator.storage.persist) {
@@ -68,82 +60,50 @@
                 return granted;
             }
 
-            // Check first-setup for socket (reads JSON file)
             async function isFirstSetupSocketTrue() {
                 const data = await readJsonFile(firstSetupDataPath);
-                return data && data.first-setup === true;
+                return data && data['first-setup'] === true;
             }
 
-            // Redirect helper
-            function redirect(path) {
-                window.location.href = path;
-            }
-
-            // Handle missing files
             async function handleMissingFiles() {
-                const envExists = await fileExists(environmentPath);
+                const envExists    = await fileExists(environmentPath);
                 const bootJsExists = await fileExists(socketbootPath);
-
-                if (!envExists) {
-                    redirect(missingFilesEnvironment);
-                } else if (!bootJsExists) {
-                    redirect(missingFilesBootJs);
-                } else {
-                    redirect(missingFilesPage1);
-                }
+                if (!envExists)    redirect(errEnvironment);
+                else if (!bootJsExists) redirect(errBootJs);
+                else               redirect(errFirstStartup);
             }
 
-            // Main logic
             try {
                 const environment = await readJsonFile(environmentPath);
+                if (!environment) { await handleMissingFiles(); return; }
 
-                if (!environment) {
-                    await handleMissingFiles();
-                    return;
-                }
+                const { has_socket, one_time } = environment;
 
-                const { has_socket, one_time, is_admin } = environment;
-
-                // HAS_SOCKET = TRUE (Socket/Limbo version)
                 if (has_socket === true) {
                     if (one_time === true) {
-                        // One-time boot: go directly to homescreen
                         redirect(homescreenPath);
                     } else {
-                        // Check if first-setup.json exists and is true
-                        const firstSetupDone = await isFirstSetupSocketTrue();
-
-                        if (!firstSetupDone) {
-                            // Start socket first setup
-                            redirect(firstStartupSocketPath);
-                        } else {
-                            // Go to homescreen
-                            redirect(homescreenPath);
+                        if (!await fileExists(firstStartupSocketPath)) {
+                            redirect(errSocketFirstStartup);
+                            return;
                         }
+                        const done = await isFirstSetupSocketTrue();
+                        redirect(done ? homescreenPath : firstStartupSocketPath);
                     }
-                } 
-                // HAS_SOCKET = FALSE (Socketless version)
-                else {
-                    // Check persistent storage permission first
-                    if (!hasPersistentStoragePermission()) {
-                        await requestPersistentStorage();
+                } else {
+                    if (!hasPersistentStoragePermission()) await requestPersistentStorage();
+                    if (!await fileExists(firstStartupSocketlessPath)) {
+                        redirect(errFirstStartup);
+                        return;
                     }
-
-                    // Check first-setup in localStorage
-                    if (!isFirstSetupTrue()) {
-                        redirect(firstStartupSocketlessPath);
-                    } else {
-                        redirect(homescreenPath);
-                    }
+                    redirect(isFirstSetupTrue() ? homescreenPath : firstStartupSocketlessPath);
                 }
-            } catch (error) {
-                console.error('Error in start.html:', error);
+            } catch (e) {
+                console.error(e);
                 await handleMissingFiles();
             }
         })();
     </script>
 </head>
-<body>
-    <p>System wird gestartet...</p>
-</body>
+<body></body>
 </html>
