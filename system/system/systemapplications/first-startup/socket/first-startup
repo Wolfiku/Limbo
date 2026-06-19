@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .page {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            text-align: center;
+        }
+        .page.active { display: flex; }
+        h1 { font-size: 28px; font-weight: bold; }
+        p { font-size: 15px; color: #aaa; }
+        input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid white;
+            color: white;
+            font-size: 16px;
+            padding: 8px 0;
+            width: 100%;
+            outline: none;
+        }
+        input::placeholder { color: #555; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+        .field { width: 100%; text-align: left; }
+        label {
+            font-size: 12px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button {
+            background: white;
+            color: black;
+            border: none;
+            padding: 12px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background: #ddd; }
+        .error-msg { color: #ff4444; font-size: 13px; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Page 1: Welcome -->
+    <div class="page active" id="page-1">
+        <h1>Limbo Setup</h1>
+        <p>Let's get your system ready.</p>
+        <button onclick="goTo(2)">Continue</button>
+    </div>
+
+    <!-- Page 2: User Information -->
+    <div class="page" id="page-2">
+        <h1>User Information</h1>
+        <div class="field">
+            <label>Username</label>
+            <input type="text" id="username" placeholder="Enter username" />
+        </div>
+        <div class="field">
+            <label>Password</label>
+            <input type="password" id="password" placeholder="Enter password" />
+        </div>
+        <div class="field">
+            <label>Date of Birth (optional)</label>
+            <input type="date" id="birthdate" />
+        </div>
+        <span class="error-msg" id="err-2">Username and password are required.</span>
+        <button onclick="goTo(3)">Continue</button>
+    </div>
+
+    <!-- Page 3: System Information -->
+    <div class="page" id="page-3">
+        <h1>System Information</h1>
+        <div class="field">
+            <label>Server Name</label>
+            <input type="text" id="servername" placeholder="Enter server name" />
+        </div>
+        <div class="field">
+            <label>Purpose (optional)</label>
+            <input type="text" id="purpose" placeholder="e.g. Work, Personal..." />
+        </div>
+        <span class="error-msg" id="err-3">Server name is required.</span>
+        <button onclick="finishSetup()">Continue</button>
+    </div>
+
+    <script>
+        async function hashPassword(password) {
+            const msgBuffer = new TextEncoder().encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(hashBuffer);
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function saveFile(path, data) {
+            const response = await fetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                throw new Error('Failed to save: ' + path);
+            }
+        }
+
+        function goTo(page) {
+            if (page === 3) {
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+                if (!username || !password) {
+                    document.getElementById('err-2').style.display = 'block';
+                    return;
+                }
+                document.getElementById('err-2').style.display = 'none';
+            }
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+        }
+
+        async function finishSetup() {
+            const servername = document.getElementById('servername').value.trim();
+            if (!servername) {
+                document.getElementById('err-3').style.display = 'block';
+                return;
+            }
+            document.getElementById('err-3').style.display = 'none';
+
+            const username = document.getElementById('username').value.trim();
+            const password = await hashPassword(document.getElementById('password').value);
+            const dateofbirth = document.getElementById('birthdate').value || '';
+            const purpose = document.getElementById('purpose').value.trim() || '';
+            const hasSocket = true;
+
+            try {
+                await saveFile('/system/data/userdata/account-data/user.json', {
+                    username: username,
+                    has_pw: password ? true : false,
+                    dateofbirth: dateofbirth
+                });
+
+                await saveFile('/system/data/userdata/account-data/user-password.json', {
+                    username: username,
+                    password: password
+                });
+
+                await saveFile('/system/data/server.json', {
+                    serverName: servername,
+                    hasSocket: hasSocket,
+                    purpose: purpose
+                });
+
+                await saveFile('/system/data/etc/first-setup.json', {
+                    first-setup: true
+                });
+
+                window.location.href = '/system/system/systemapplications/homescreen/homescreen-start.html';
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
