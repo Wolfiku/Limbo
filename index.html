@@ -1,66 +1,13 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Limbo Hybrid</title>
-
-  <!-- PWA-Manifest & Icons -->
-  <link rel="manifest" href="system/code/manifest.json">
-  <link rel="icon" href="system/systemdata/icon-192.png" sizes="192x192" type="image/png">
-  <meta name="theme-color" content="#ffffff">
-
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #000;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      font-family: sans-serif;
-    }
-    #status {
-      text-align: center;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Index</title>
+    <script>
+        window.location.href = '/system/system/boot/start.html';
+    </script>
 </head>
 <body>
-  <div id="status">Starte Limbo Hybrid…</div>
-
-  <script>
-    const status = document.getElementById('status');
-
-    // Service Worker registrieren
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('system/code/serviceworker.js')
-        .then(() => console.log('Service Worker registriert'))
-        .catch(err => console.warn('SW-Fehler:', err));
-    }
-
-    function openFullscreenPage(path) {
-      fetch(path)
-        .then(res => {
-          if (!res.ok) throw new Error('404');
-          window.location.href = path;
-        })
-        .catch(() => {
-          status.textContent = "Fehlercode 16: Datei '" + path + "' nicht gefunden.";
-        });
-    }
-
-    // Start-Logik
-    const firstLogin = localStorage.getItem("firstlogin_complete");
-
-    if (!firstLogin) {
-      status.textContent = "Erster Start – leite weiter…";
-      openFullscreenPage("system/systemprogramms/firststartup.html");
-    } else {
-      status.textContent = "Lade Homescreen…";
-      openFullscreenPage("system/systemprogramms/homescreen.html");
-    }
-  </script>
 </body>
 </html>
