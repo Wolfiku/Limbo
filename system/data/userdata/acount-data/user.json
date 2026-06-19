@@ -1,1 +1,5 @@
-
+{
+  "username": "<username>",
+  "has_pw": "<has_pw>",
+  "dateofbirth": "<dateofbirth>"
+}
