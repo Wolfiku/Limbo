@@ -1,1 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .page {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            text-align: center;
+        }
+        .page.active { display: flex; }
+        h1 { font-size: 28px; font-weight: bold; }
+        p { font-size: 15px; color: #aaa; }
+        input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid white;
+            color: white;
+            font-size: 16px;
+            padding: 8px 0;
+            width: 100%;
+            outline: none;
+        }
+        input::placeholder { color: #555; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+        .field { width: 100%; text-align: left; }
+        label {
+            font-size: 12px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button {
+            background: white;
+            color: black;
+            border: none;
+            padding: 12px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background: #ddd; }
+        .error-msg { color: #ff4444; font-size: 13px; display: none; }
+    </style>
+</head>
+<body>
 
+    <!-- Page 1: Welcome -->
+    <div class="page active" id="page-1">
+        <h1>Limbo Setup</h1>
+        <p>Let's get your system ready.</p>
+        <button onclick="goTo(2)">Continue</button>
+    </div>
+
+    <!-- Page 2: User Information -->
+    <div class="page" id="page-2">
+        <h1>User Information</h1>
+        <div class="field">
+            <label>Username</label>
+            <input type="text" id="username" placeholder="Enter username" />
+        </div>
+        <div class="field">
+            <label>Birthdate (optional)</label>
+            <input type="date" id="birthdate" />
+        </div>
+        <span class="error-msg" id="err-2">Username is required.</span>
+        <button onclick="goTo(3)">Continue</button>
+    </div>
+
+    <!-- Page 3: System Information -->
+    <div class="page" id="page-3">
+        <h1>System Information</h1>
+        <div class="field">
+            <label>System Name</label>
+            <input type="text" id="systemname" placeholder="Enter system name" />
+        </div>
+        <div class="field">
+            <label>System Purpose (optional)</label>
+            <input type="text" id="systempurpose" placeholder="e.g. Work, Personal..." />
+        </div>
+        <span class="error-msg" id="err-3">System name is required.</span>
+        <button onclick="finish()">Continue</button>
+    </div>
+
+    <script>
+        function goTo(page) {
+            if (page === 3) {
+                const username = document.getElementById('username').value.trim();
+                if (!username) {
+                    document.getElementById('err-2').style.display = 'block';
+                    return;
+                }
+                document.getElementById('err-2').style.display = 'none';
+            }
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+        }
+
+        function finish() {
+            const systemname = document.getElementById('systemname').value.trim();
+            if (!systemname) {
+                document.getElementById('err-3').style.display = 'block';
+                return;
+            }
+            document.getElementById('err-3').style.display = 'none';
+
+            localStorage.setItem('first-setup', 'true');
+            localStorage.setItem('username', document.getElementById('username').value.trim());
+            localStorage.setItem('birthdate', document.getElementById('birthdate').value || '');
+            localStorage.setItem('system-name', systemname);
+            localStorage.setItem('system-purpose', document.getElementById('systempurpose').value.trim() || '');
+
+            window.location.href = '/system/system/systemapplications/homescreen/homescreen-start.html';
+        }
+    </script>
+</body>
+</html>
