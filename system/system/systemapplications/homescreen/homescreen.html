@@ -1,1 +1,589 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Homescreen</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  body {
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Search bar */
+  #search-container {
+    height: 0;
+    overflow: hidden;
+    transition: height 0.3s ease;
+    background: #000;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  #search-container.visible {
+    height: 52px;
+    border-bottom: 1px solid #222;
+  }
+  #search-input {
+    width: 100%;
+    height: 52px;
+    background: #111;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 15px;
+    padding: 0 16px;
+  }
+  #search-input::placeholder { color: #555; }
+
+  /* Top bar */
+  #topbar {
+    position: sticky;
+    top: 0;
+    z-index: 99;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 10px 16px;
+    background: #000;
+    border-bottom: 1px solid #111;
+  }
+  #clock {
+    font-size: 13px;
+    color: #aaa;
+    letter-spacing: 0.05em;
+  }
+  #net-status {
+    font-size: 11px;
+    color: #555;
+    margin-right: 10px;
+  }
+  #net-status.offline { color: #c0392b; }
+
+  /* App list */
+  #app-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .app-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid #111;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .app-item:active { background: #0a0a0a; }
+  .app-item.offline-blocked { opacity: 0.4; cursor: not-allowed; }
+
+  .app-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #1a1a1a;
+    flex-shrink: 0;
+    margin-right: 13px;
+  }
+  .app-icon-placeholder {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #1a1a1a;
+    flex-shrink: 0;
+    margin-right: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #333;
+  }
+
+  .app-name {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-source {
+    font-size: 10px;
+    color: #444;
+    margin-top: 2px;
+  }
+
+  .app-menu-btn {
+    background: none;
+    border: none;
+    color: #555;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .app-menu-btn:hover { color: #fff; }
+
+  /* Dropdown */
+  .dropdown {
+    display: none;
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    z-index: 200;
+    min-width: 220px;
+    padding: 4px 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  }
+  .dropdown.open { display: block; }
+
+  .dropdown-header {
+    padding: 10px 14px 6px;
+    border-bottom: 1px solid #222;
+    margin-bottom: 4px;
+  }
+  .dropdown-header .d-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .dropdown-header .d-author,
+  .dropdown-header .d-desc,
+  .dropdown-header .d-producer,
+  .dropdown-header .d-license,
+  .dropdown-header .d-contact {
+    font-size: 11px;
+    color: #666;
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .dropdown-header .d-contact a {
+    color: #4a9eff;
+    text-decoration: none;
+  }
+
+  .dropdown-sep {
+    height: 1px;
+    background: #1e1e1e;
+    margin: 4px 0;
+  }
+
+  .dropdown-item {
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dropdown-item:hover { background: #1a1a1a; color: #fff; }
+  .dropdown-item .di-icon { font-size: 14px; }
+
+  /* Empty state */
+  #empty-state {
+    display: none;
+    text-align: center;
+    padding: 60px 20px;
+    color: #333;
+    font-size: 14px;
+  }
+
+  /* Loading */
+  #loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: #333;
+    font-size: 14px;
+  }
+
+  /* Scroll hint area */
+  #scroll-trigger {
+    height: 20px;
+  }
+</style>
+</head>
+<body>
+
+<div id="search-container">
+  <input type="search" id="search-input" placeholder="Search applications…" autocomplete="off">
+</div>
+
+<div id="topbar">
+  <span id="net-status">●</span>
+  <span id="clock"></span>
+</div>
+
+<div id="scroll-trigger"></div>
+
+<ul id="app-list">
+  <li id="loading">Scanning applications…</li>
+</ul>
+<div id="empty-state">No applications found.</div>
+
+<script>
+(function() {
+  // ── Clock ──────────────────────────────────────────────────────────────────
+  const clockEl = document.getElementById('clock');
+  function updateClock() {
+    const now = new Date();
+    clockEl.textContent = now.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+  }
+  updateClock();
+  setInterval(updateClock, 10000);
+
+  // ── Network ────────────────────────────────────────────────────────────────
+  const netEl = document.getElementById('net-status');
+  let isOnline = navigator.onLine;
+  function updateNet() {
+    isOnline = navigator.onLine;
+    netEl.textContent = isOnline ? '●' : '⊘ offline';
+    netEl.className = isOnline ? '' : 'offline';
+    renderApps();
+  }
+  window.addEventListener('online', updateNet);
+  window.addEventListener('offline', updateNet);
+  updateNet();
+
+  // ── Pull-down search ───────────────────────────────────────────────────────
+  const searchContainer = document.getElementById('search-container');
+  const searchInput = document.getElementById('search-input');
+  let atTop = true;
+  let lastScrollY = 0;
+  let searchVisible = false;
+
+  window.addEventListener('scroll', () => {
+    const sy = window.scrollY;
+    if (sy === 0 && lastScrollY === 0 && !searchVisible) {
+      // already at top, scroll up = reveal
+    }
+    lastScrollY = sy;
+    atTop = sy === 0;
+  }, { passive: true });
+
+  // Touch / wheel pull-down when at top
+  let touchStartY = null;
+  document.addEventListener('touchstart', e => {
+    if (window.scrollY === 0) touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (touchStartY !== null && window.scrollY === 0) {
+      const dy = e.touches[0].clientY - touchStartY;
+      if (dy > 40 && !searchVisible) showSearch();
+    }
+  }, { passive: true });
+  document.addEventListener('touchend', () => { touchStartY = null; });
+
+  document.addEventListener('wheel', e => {
+    if (window.scrollY === 0 && e.deltaY < -20 && !searchVisible) showSearch();
+    if (searchVisible && e.deltaY > 10) hideSearch();
+  }, { passive: true });
+
+  function showSearch() {
+    searchVisible = true;
+    searchContainer.classList.add('visible');
+    setTimeout(() => searchInput.focus(), 100);
+  }
+  function hideSearch() {
+    searchVisible = false;
+    searchContainer.classList.remove('visible');
+    searchInput.blur();
+    searchInput.value = '';
+    renderApps();
+  }
+
+  searchInput.addEventListener('input', () => renderApps());
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Escape') hideSearch(); });
+
+  // ── App scanning ───────────────────────────────────────────────────────────
+  // We use fetch to load manifests. Works when served via a local server
+  // that supports directory listing OR when manifest paths are known.
+  // For a static file environment we try to fetch manifests directly.
+
+  const SCAN_DIRS = ['/applications', '/systemd/applications'];
+  let allApps = [];
+
+  async function fetchJSON(url) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+
+  async function fetchText(url) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) return null;
+      return await r.text();
+    } catch { return null; }
+  }
+
+  // Try to get directory listing from a given path
+  async function listSubDirs(basePath) {
+    const html = await fetchText(basePath + '/');
+    if (!html) return [];
+    // Parse <a href="..."> entries from directory listing
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const links = Array.from(doc.querySelectorAll('a[href]'));
+    const dirs = [];
+    for (const a of links) {
+      const href = a.getAttribute('href');
+      // Skip parent links and files (no extension in last segment = likely dir)
+      if (!href || href === '../' || href === './' || href.startsWith('?') || href.startsWith('/') ) continue;
+      const name = href.replace(/\/$/, '');
+      if (!name.includes('.')) dirs.push(name);
+    }
+    return dirs;
+  }
+
+  async function scanDir(basePath) {
+    const apps = [];
+    const subDirs = await listSubDirs(basePath);
+    const promises = subDirs.map(async (dir) => {
+      const appBase = basePath + '/' + dir;
+      let manifest = null;
+      manifest = await fetchJSON(appBase + '/manifest.json');
+      if (!manifest) manifest = await fetchJSON(appBase + '/manifest.limboapp');
+      if (!manifest) return;
+      manifest._appBase = appBase;
+      manifest._appDir = dir;
+      manifest._source = basePath;
+      apps.push(manifest);
+    });
+    await Promise.all(promises);
+    return apps;
+  }
+
+  async function scanAll() {
+    const results = await Promise.all(SCAN_DIRS.map(scanDir));
+    allApps = results.flat();
+    renderApps();
+    document.getElementById('loading').style.display = 'none';
+  }
+
+  // ── Rendering ──────────────────────────────────────────────────────────────
+  const list = document.getElementById('app-list');
+  const emptyState = document.getElementById('empty-state');
+
+  function renderApps() {
+    const query = searchInput.value.trim().toLowerCase();
+    const filtered = allApps.filter(app => {
+      if (!query) return true;
+      const name = (app['display-name'] || app['application-name'] || '').toLowerCase();
+      const desc = (app['description'] || '').toLowerCase();
+      return name.includes(query) || desc.includes(query);
+    });
+
+    list.innerHTML = '';
+
+    if (filtered.length === 0 && allApps.length > 0) {
+      emptyState.style.display = 'block';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    filtered.forEach((app, idx) => {
+      const li = document.createElement('li');
+      li.className = 'app-item';
+      const needsInternet = app['needs-internet'] === true;
+      const blocked = needsInternet && !isOnline;
+      if (blocked) li.classList.add('offline-blocked');
+
+      const displayName = app['display-name'] || app['application-name'] || app._appDir;
+      const base = app._appBase;
+
+      // Icon
+      let iconEl;
+      if (app['icon-small'] || app['icon']) {
+        iconEl = document.createElement('img');
+        iconEl.className = 'app-icon';
+        iconEl.alt = displayName;
+        // Load small first, then big
+        if (app['icon-small']) {
+          iconEl.src = base + '/' + app['icon-small'];
+          if (app['icon']) {
+            iconEl.onload = () => {
+              const big = new Image();
+              big.onload = () => { iconEl.src = big.src; };
+              big.src = base + '/' + app['icon'];
+            };
+          }
+        } else {
+          iconEl.src = base + '/' + app['icon'];
+        }
+        iconEl.onerror = () => {
+          iconEl.replaceWith(makePlaceholder());
+        };
+      } else {
+        iconEl = makePlaceholder();
+      }
+
+      function makePlaceholder() {
+        const div = document.createElement('div');
+        div.className = 'app-icon-placeholder';
+        div.textContent = (displayName[0] || '?').toUpperCase();
+        return div;
+      }
+
+      // Name block
+      const nameBlock = document.createElement('div');
+      nameBlock.style.flex = '1';
+      nameBlock.style.overflow = 'hidden';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'app-name';
+      nameEl.textContent = displayName;
+
+      nameBlock.appendChild(nameEl);
+
+      // Menu button
+      const menuBtn = document.createElement('button');
+      menuBtn.className = 'app-menu-btn';
+      menuBtn.textContent = '⋯';
+      menuBtn.setAttribute('aria-label', 'More options');
+
+      // Dropdown
+      const dropdown = buildDropdown(app, base);
+
+      menuBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        // Close all other dropdowns
+        document.querySelectorAll('.dropdown.open').forEach(d => {
+          if (d !== dropdown) d.classList.remove('open');
+        });
+        dropdown.classList.toggle('open');
+      });
+
+      li.appendChild(iconEl);
+      li.appendChild(nameBlock);
+      li.appendChild(menuBtn);
+      li.appendChild(dropdown);
+
+      // Click to open app
+      li.addEventListener('click', e => {
+        if (e.target === menuBtn || menuBtn.contains(e.target)) return;
+        if (dropdown.contains(e.target)) return;
+        if (blocked) {
+          showToast('No internet connection');
+          return;
+        }
+        const startFile = app['starting-file'] || 'index.html';
+        window.location.href = base + '/' + startFile;
+      });
+
+      list.appendChild(li);
+    });
+  }
+
+  function buildDropdown(app, base) {
+    const dd = document.createElement('div');
+    dd.className = 'dropdown';
+
+    // Info header
+    const header = document.createElement('div');
+    header.className = 'dropdown-header';
+
+    const fields = [
+      ['application-name', 'App ID', true],
+      ['display-name', 'Name', true],
+      ['author', 'Author', false],
+      ['description', 'Description', false],
+      ['producer', 'Producer', false],
+      ['license', 'License', false],
+    ];
+
+    fields.forEach(([key, label, isTitle]) => {
+      if (!app[key]) return;
+      const el = document.createElement('div');
+      el.className = isTitle ? 'd-name' : 'd-desc';
+      if (isTitle && key === 'display-name') {
+        el.textContent = app[key];
+      } else if (key === 'description') {
+        el.textContent = app[key];
+        el.style.marginTop = '4px';
+      } else {
+        el.textContent = label + ': ' + app[key];
+      }
+      header.appendChild(el);
+    });
+
+    // Email / website
+    if (app['email'] || app['website']) {
+      const contact = document.createElement('div');
+      contact.className = 'd-contact';
+      const parts = [];
+      if (app['email']) parts.push('<a href="mailto:' + app['email'] + '">' + app['email'] + '</a>');
+      if (app['website']) parts.push('<a href="' + app['website'] + '" target="_blank">' + app['website'] + '</a>');
+      contact.innerHTML = parts.join(' · ');
+      header.appendChild(contact);
+    }
+
+    dd.appendChild(header);
+
+    // Info files
+    const infoFiles = app['info-files'];
+    if (infoFiles && infoFiles.length > 0) {
+      const sep = document.createElement('div');
+      sep.className = 'dropdown-sep';
+      dd.appendChild(sep);
+
+      infoFiles.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.innerHTML = '<span class="di-icon">📄</span>' + escapeHTML(file.name || file.path);
+        item.addEventListener('click', e => {
+          e.stopPropagation();
+          window.open(base + '/' + file.path, '_blank');
+          dd.classList.remove('open');
+        });
+        dd.appendChild(item);
+      });
+    }
+
+    return dd;
+  }
+
+  function escapeHTML(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    let t = document.getElementById('toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;z-index:9999;border:1px solid #333;';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.style.opacity = '0', 2000);
+  }
+
+  // ── Close dropdowns on outside click ──────────────────────────────────────
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  scanAll();
+})();
+</script>
+</body>
+</html>
