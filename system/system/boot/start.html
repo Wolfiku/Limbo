@@ -6,8 +6,23 @@
     <title>Start</title>
     <script>
         (async () => {
-            // Dynamische Basis-URL (funktioniert auf GitHub Pages und lokal)
-            const BASE = window.location.origin + '/' + window.location.pathname.split('/')[1];
+            // --- BASE-Pfad robust ermitteln -------------------------------
+            // Alte Logik (pathname.split('/')[1]) ging immer von einem
+            // Unterpfad aus (z.B. GitHub Pages: /Limbo/...) und brach beim
+            // Hosting im Domain-Root (z.B. lokaler Node-Server), weil dann
+            // ein falsches zusätzliches "/system" vor jeden Pfad gehängt
+            // wurde -> alle fetch()-Aufrufe liefen auf 404.
+            // Neue Logik: Wir suchen den ersten "/system/"-Marker im
+            // aktuellen Pfad und alles davor ist der Deployment-Unterpfad.
+            // Das funktioniert sowohl im Root als auch unter einem
+            // beliebigen Unterpfad.
+            function computeBase() {
+                const marker = '/system/';
+                const idx = window.location.pathname.indexOf(marker);
+                const prefix = idx !== -1 ? window.location.pathname.slice(0, idx) : '';
+                return window.location.origin + prefix;
+            }
+            const BASE = computeBase();
 
             const environmentPath            = BASE + '/system/etc/info/host/environment.info';
             const firstStartupSocketlessPath = BASE + '/system/system/systemapplications/first-startup/localstorage/first-startup.html';
@@ -19,20 +34,21 @@
             const errSocketFirstStartup      = BASE + '/system/system/errors/missing-files/boot/socket-first-startup.html';
             const errBootJs                  = BASE + '/system/system/errors/missing-files/boot/boot.js.html';
             const errEnvironment             = BASE + '/system/system/errors/missing-files/boot/environment.info.html';
+            const errGeneric                 = BASE + '/system/system/errors/server/500.html';
 
             const STORAGE_KEY   = 'first-setup';
             const PERMISSION_KEY = 'persistentStorageAllowed';
 
             async function fileExists(path) {
                 try {
-                    const r = await fetch(path, { method: 'HEAD' });
+                    const r = await fetch(path, { method: 'HEAD', cache: 'no-store' });
                     return r.ok;
                 } catch { return false; }
             }
 
             async function readJsonFile(path) {
                 try {
-                    const r = await fetch(path);
+                    const r = await fetch(path, { cache: 'no-store' });
                     if (!r.ok) return null;
                     return await r.json();
                 } catch { return null; }
@@ -54,7 +70,7 @@
                 if (granted) {
                     localStorage.setItem(PERMISSION_KEY, 'true');
                     if (navigator.storage && navigator.storage.persist) {
-                        await navigator.storage.persist();
+                        try { await navigator.storage.persist(); } catch { /* ignore: not critical */ }
                     }
                 }
                 return granted;
@@ -62,7 +78,7 @@
 
             async function isFirstSetupSocketTrue() {
                 const data = await readJsonFile(firstSetupDataPath);
-                return data && data['first-setup'] === true;
+                return !!(data && data['first-setup'] === true);
             }
 
             async function handleMissingFiles() {
@@ -99,8 +115,14 @@
                     redirect(isFirstSetupTrue() ? homescreenPath : firstStartupSocketlessPath);
                 }
             } catch (e) {
-                console.error(e);
-                await handleMissingFiles();
+                console.error('[Limbo] Boot-Fehler:', e);
+                try {
+                    await handleMissingFiles();
+                } catch (e2) {
+                    // Selbst die Fehlerbehandlung ist fehlgeschlagen (z.B. kein
+                    // Netzwerk) -> letzte Rettung: generische 500-Fehlerseite.
+                    redirect(errGeneric);
+                }
             }
         })();
     </script>
