@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Index</title>
     <script>
-        window.location.href = '/system/system/boot/start.html';
+        // Relativer Pfad statt absolutem: funktioniert sowohl bei Hosting im
+        // Domain-Root als auch unter einem Unterpfad (z.B. GitHub Pages
+        // Projekt-Seiten unter /<repo-name>/).
+        window.location.href = 'system/system/boot/start.html';
     </script>
 </head>
 <body>

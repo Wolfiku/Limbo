@@ -1,0 +1,15 @@
+{
+  "name": "limbo",
+  "version": "1.0.0",
+  "description": "Limbo-hybrid - läuft sowohl als statisches System (localStorage) als auch als Node.js-Server mit Schreibberechtigung (Socket-Modus).",
+  "main": "system/system/boot/Socketboot/boot.js",
+  "scripts": {
+    "start": "node system/system/boot/Socketboot/boot.js"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "wolfiku",
+  "license": "UNLICENSED",
+  "private": true
+}
