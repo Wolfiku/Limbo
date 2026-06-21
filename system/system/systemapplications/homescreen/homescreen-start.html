@@ -1,1 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homescreen</title>
+</head>
+<body>
+    <script>
+        // homescreen-start.html ist absichtlich ein reiner Router: Er prüft
+        // nur, ob homescreen.html im selben Verzeichnis existiert, und
+        // leitet entsprechend weiter. Die eigentliche Logik/Oberfläche lebt
+        // ausschließlich in homescreen.html.
 
+        // Robuste BASE-Ermittlung, konsistent mit start.html etc.
+        function computeBase() {
+            const marker = '/system/';
+            const idx = window.location.pathname.indexOf(marker);
+            const prefix = idx !== -1 ? window.location.pathname.slice(0, idx) : '';
+            return window.location.origin + prefix;
+        }
+        const BASE = computeBase();
+
+        const homescreenPath = BASE + '/system/system/systemapplications/homescreen/homescreen.html';
+        const errHomescreenPath = BASE + '/system/system/errors/missing-files/Homescreen/homescreen.html';
+
+        async function fileExists(path) {
+            try {
+                const r = await fetch(path, { method: 'HEAD', cache: 'no-store' });
+                return r.ok;
+            } catch {
+                return false;
+            }
+        }
+
+        (async () => {
+            const exists = await fileExists(homescreenPath);
+            window.location.href = exists ? homescreenPath : errHomescreenPath;
+        })();
+    </script>
+</body>
+</html>

@@ -235,6 +235,20 @@
 
 <script>
 (function() {
+  // ── Base-Pfad ────────────────────────────────────────────────────────────
+  // Gleiches Prinzip wie im Rest des Systems (start.html, first-startup.html,
+  // ...): Ermittelt den Deployment-Unterpfad anhand des "/system/"-Markers
+  // im aktuellen Pfad. Vorher waren die Scan-Verzeichnisse fest auf Domain-
+  // Root verdrahtet ('/applications', '/systemd/applications') -- das bricht
+  // bei jedem Hosting unter einem Unterpfad (z.B. GitHub Pages).
+  function computeBase() {
+    const marker = '/system/';
+    const idx = window.location.pathname.indexOf(marker);
+    const prefix = idx !== -1 ? window.location.pathname.slice(0, idx) : '';
+    return window.location.origin + prefix;
+  }
+  const BASE = computeBase();
+
   // ── Clock ──────────────────────────────────────────────────────────────────
   const clockEl = document.getElementById('clock');
   function updateClock() {
@@ -260,18 +274,7 @@
   // ── Pull-down search ───────────────────────────────────────────────────────
   const searchContainer = document.getElementById('search-container');
   const searchInput = document.getElementById('search-input');
-  let atTop = true;
-  let lastScrollY = 0;
   let searchVisible = false;
-
-  window.addEventListener('scroll', () => {
-    const sy = window.scrollY;
-    if (sy === 0 && lastScrollY === 0 && !searchVisible) {
-      // already at top, scroll up = reveal
-    }
-    lastScrollY = sy;
-    atTop = sy === 0;
-  }, { passive: true });
 
   // Touch / wheel pull-down when at top
   let touchStartY = null;
@@ -308,11 +311,21 @@
   searchInput.addEventListener('keydown', e => { if (e.key === 'Escape') hideSearch(); });
 
   // ── App scanning ───────────────────────────────────────────────────────────
-  // We use fetch to load manifests. Works when served via a local server
-  // that supports directory listing OR when manifest paths are known.
-  // For a static file environment we try to fetch manifests directly.
-
-  const SCAN_DIRS = ['/applications', '/systemd/applications'];
+  // Apps werden an zwei Stellen gesucht, beide auf oberster Ebene des
+  // Deployments (gleiche Ebene wie /system):
+  //   - /applications          (vom Nutzer installierte Apps)
+  //   - /systemd/applications  (vorinstallierte/System-Apps)
+  // Jede App liegt in einem eigenen Unterordner mit manifest.json bzw.
+  // manifest.limboapp.
+  //
+  // Die Pfade selbst stimmten schon immer -- der Bug war, dass sie fest auf
+  // den Domain-Root verdrahtet waren ('/applications' statt BASE-relativ).
+  // Unter einem Unterpfad (z.B. GitHub Pages: /Limbo/...) zeigte das ins
+  // Leere. Jetzt werden sie wie der Rest des Systems über BASE aufgelöst.
+  const SCAN_DIRS = [
+    BASE + '/applications',
+    BASE + '/systemd/applications'
+  ];
   let allApps = [];
 
   async function fetchJSON(url) {
@@ -331,19 +344,40 @@
     } catch { return null; }
   }
 
-  // Try to get directory listing from a given path
+  // Ermittelt die Unterordner (= installierte Apps) innerhalb eines
+  // Scan-Verzeichnisses.
+  //
+  // WICHTIG: Die ursprüngliche Implementierung hat ausschließlich versucht,
+  // eine vom Webserver generierte HTML-Verzeichnisliste (Apache/nginx
+  // "autoindex") zu parsen. Das funktioniert weder mit reinem statischem
+  // Hosting (z.B. GitHub Pages liefert für ein Verzeichnis ohne index.html
+  // schlicht 404, nie eine automatische Auflistung) noch mit dem
+  // mitgelieferten Node-Server (boot.js liefert ebenfalls keine
+  // Verzeichnislisten aus) -- in beiden offiziell unterstützten
+  // Betriebsarten wurden dadurch NIE Apps gefunden.
+  //
+  // Fix: Primär wird eine explizite Index-Datei (apps-index.json) gelesen,
+  // die einfach eine Liste der App-Ordnernamen enthält. Das funktioniert
+  // überall, egal wie der Webserver konfiguriert ist. Die alte
+  // HTML-Parsing-Methode bleibt als Fallback erhalten, für den Fall, dass
+  // jemand einen Server mit echter Verzeichnisauflistung einsetzt.
   async function listSubDirs(basePath) {
+    const index = await fetchJSON(basePath + '/apps-index.json');
+    if (index && Array.isArray(index.apps)) {
+      return index.apps;
+    }
+
+    // Fallback: klassisches Directory-Listing parsen, falls der Server
+    // sowas anbietet.
     const html = await fetchText(basePath + '/');
     if (!html) return [];
-    // Parse <a href="..."> entries from directory listing
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     const links = Array.from(doc.querySelectorAll('a[href]'));
     const dirs = [];
     for (const a of links) {
       const href = a.getAttribute('href');
-      // Skip parent links and files (no extension in last segment = likely dir)
-      if (!href || href === '../' || href === './' || href.startsWith('?') || href.startsWith('/') ) continue;
+      if (!href || href === '../' || href === './' || href.startsWith('?') || href.startsWith('/')) continue;
       const name = href.replace(/\/$/, '');
       if (!name.includes('.')) dirs.push(name);
     }
@@ -522,14 +556,39 @@
     });
 
     // Email / website
+    // SICHERHEITSFIX: Vorher wurden diese Werte direkt unescaped per
+    // innerHTML eingefügt -- ein manifest.json mit z.B.
+    // "website": "<img src=x onerror=alert(1)>" hätte beliebiges HTML/JS
+    // injizieren können (Stored-XSS über eine "installierte App"). Jetzt
+    // werden die Links sicher über DOM-Methoden gebaut (textContent statt
+    // innerHTML) und das href-Schema wird geprüft, damit z.B. kein
+    // "javascript:"-Link untergeschoben werden kann.
     if (app['email'] || app['website']) {
       const contact = document.createElement('div');
       contact.className = 'd-contact';
+
       const parts = [];
-      if (app['email']) parts.push('<a href="mailto:' + app['email'] + '">' + app['email'] + '</a>');
-      if (app['website']) parts.push('<a href="' + app['website'] + '" target="_blank">' + app['website'] + '</a>');
-      contact.innerHTML = parts.join(' · ');
-      header.appendChild(contact);
+      if (app['email'] && /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(app['email'])) {
+        const a = document.createElement('a');
+        a.href = 'mailto:' + app['email'];
+        a.textContent = app['email'];
+        parts.push(a);
+      }
+      if (app['website'] && /^https?:\/\//i.test(app['website'])) {
+        const a = document.createElement('a');
+        a.href = app['website'];
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = app['website'];
+        parts.push(a);
+      }
+
+      parts.forEach((el, i) => {
+        if (i > 0) contact.appendChild(document.createTextNode(' · '));
+        contact.appendChild(el);
+      });
+
+      if (parts.length > 0) header.appendChild(contact);
     }
 
     dd.appendChild(header);
@@ -544,7 +603,11 @@
       infoFiles.forEach(file => {
         const item = document.createElement('div');
         item.className = 'dropdown-item';
-        item.innerHTML = '<span class="di-icon">📄</span>' + escapeHTML(file.name || file.path);
+        const icon = document.createElement('span');
+        icon.className = 'di-icon';
+        icon.textContent = '📄';
+        item.appendChild(icon);
+        item.appendChild(document.createTextNode(file.name || file.path));
         item.addEventListener('click', e => {
           e.stopPropagation();
           window.open(base + '/' + file.path, '_blank');
@@ -555,10 +618,6 @@
     }
 
     return dd;
-  }
-
-  function escapeHTML(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   // ── Toast ──────────────────────────────────────────────────────────────────
